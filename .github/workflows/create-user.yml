@@ -1,0 +1,41 @@
+cat > .github/workflows/create-user.yml << 'EOF'
+name: Create new user (onboarding)
+on:
+  workflow_dispatch:
+    inputs:
+      display_name:
+        description: "Full name (e.g. Apple Lee)"
+        required: true
+      email:
+        description: "Email (e.g. apple.lee@yourdomain.com)"
+        required: true
+      department:
+        description: "Department (e.g. IT, Finance, HR)"
+        required: true
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create user via Graph API
+        run: |
+          az rest --method POST \
+            --url "https://graph.microsoft.com/v1.0/users" \
+            --headers "Content-Type=application/json" \
+            --body '{
+              "displayName": "${{ inputs.display_name }}",
+              "userPrincipalName": "${{ inputs.email }}",
+              "department": "${{ inputs.department }}",
+              "accountEnabled": true,
+              "mailNickname": "'$(echo '${{ inputs.email }}' | cut -d@ -f1)'",
+              "passwordProfile": {
+                "password": "Welcome@2026!",
+                "forceChangePasswordNextSignIn": true
+              }
+            }'
+EOF
