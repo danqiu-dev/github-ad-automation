@@ -1,0 +1,16 @@
+# .github/workflows/test-login.yml
+name: Test Azure login
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Confirm login works
+        run: az account show
