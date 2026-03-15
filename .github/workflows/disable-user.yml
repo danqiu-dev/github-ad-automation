@@ -1,0 +1,30 @@
+cat > .github/workflows/disable-user.yml << 'EOF'
+name: Disable user (offboarding)
+on:
+  workflow_dispatch:
+    inputs:
+      user_email:
+        description: "User email to disable (e.g. john.smith@yourdomain.com)"
+        required: true
+
+jobs:
+  disable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Disable account
+        run: |
+          az rest --method PATCH \
+            --url "https://graph.microsoft.com/v1.0/users/${{ inputs.user_email }}" \
+            --headers "Content-Type=application/json" \
+            --body '{"accountEnabled": false}'
+
+      - name: Revoke all active sessions
+        run: |
+          az rest --method POST \
+            --url "https://graph.microsoft.com/v1.0/users/${{ inputs.user_email }}/revokeSignInSessions"
+EOF
