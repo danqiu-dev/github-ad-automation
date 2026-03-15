@@ -1,4 +1,3 @@
-cat > .github/workflows/create-user.yml << 'EOF'
 name: Create new user (onboarding)
 on:
   workflow_dispatch:
@@ -38,4 +37,3 @@ jobs:
                 "forceChangePasswordNextSignIn": true
               }
             }'
-EOF

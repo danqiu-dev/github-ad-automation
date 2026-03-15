@@ -1,4 +1,3 @@
-cat > .github/workflows/unlock-account.yml << 'EOF'
 name: Unlock user account
 on:
   workflow_dispatch:
@@ -22,4 +21,3 @@ jobs:
             --url "https://graph.microsoft.com/v1.0/users/${{ inputs.user_email }}" \
             --headers "Content-Type=application/json" \
             --body '{"accountEnabled": true}'
-EOF

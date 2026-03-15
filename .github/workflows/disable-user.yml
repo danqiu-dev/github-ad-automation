@@ -1,4 +1,3 @@
-cat > .github/workflows/disable-user.yml << 'EOF'
 name: Disable user (offboarding)
 on:
   workflow_dispatch:
@@ -27,4 +26,3 @@ jobs:
         run: |
           az rest --method POST \
             --url "https://graph.microsoft.com/v1.0/users/${{ inputs.user_email }}/revokeSignInSessions"
-EOF
