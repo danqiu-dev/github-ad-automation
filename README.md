@@ -113,6 +113,8 @@ az rest --method POST `
 
 Go to **Azure Portal → Entra ID → Roles and administrators → User Administrator** — you should see `github-ad-automation` listed as a member.
 
+![User Administrator](<SP-user administrator-1.png>)
+
 ---
 
 ### Step 3 — Assign Contributor role on the subscription
@@ -130,7 +132,7 @@ az role assignment create \
 
 Go to **Azure Portal → Subscriptions → Your subscription → Access control (IAM) → Role assignments** — you should see `github-ad-automation` with the Contributor role.
 
-![User Administrator](<SP-user administrator-1.png>)
+![Role Assignment](Roleassignment.png)
 ---
 
 ### Step 4 — Grant Graph API read and write permissions
