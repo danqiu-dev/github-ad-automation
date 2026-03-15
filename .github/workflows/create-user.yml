@@ -17,9 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Azure login
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Extract mail nickname
+        id: nickname
+        run: |
+          NICKNAME=$(echo "${{ inputs.email }}" | cut -d@ -f1)
+          echo "value=$NICKNAME" >> $GITHUB_OUTPUT
 
       - name: Create user via Graph API
         run: |
@@ -31,7 +37,7 @@ jobs:
               "userPrincipalName": "${{ inputs.email }}",
               "department": "${{ inputs.department }}",
               "accountEnabled": true,
-              "mailNickname": "'$(echo '${{ inputs.email }}' | cut -d@ -f1)'",
+              "mailNickname": "${{ steps.nickname.outputs.value }}",
               "passwordProfile": {
                 "password": "Welcome@2026!",
                 "forceChangePasswordNextSignIn": true
