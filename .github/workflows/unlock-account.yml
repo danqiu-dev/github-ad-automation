@@ -1,0 +1,25 @@
+cat > .github/workflows/unlock-account.yml << 'EOF'
+name: Unlock user account
+on:
+  workflow_dispatch:
+    inputs:
+      user_email:
+        description: "User email (e.g. john.smith@yourdomain.com)"
+        required: true
+
+jobs:
+  unlock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Unlock account via Graph API
+        run: |
+          az rest --method PATCH \
+            --url "https://graph.microsoft.com/v1.0/users/${{ inputs.user_email }}" \
+            --headers "Content-Type=application/json" \
+            --body '{"accountEnabled": true}'
+EOF
