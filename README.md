@@ -11,7 +11,7 @@ This project automates four of the most common IT helpdesk tasks:
 
 | Workflow | What it does | Trigger |
 |----------|-------------|---------|
-| `reset-password.yml` | Resets a user's Entra ID password and forces change on next sign-in | Manual |
+| `reset-password.yml` | Resets a user's Entra ID password with custom temp password and optional force-change | Manual |
 | `unlock-account.yml` | Re-enables a locked/disabled Entra ID account | Manual |
 | `create-user.yml` | Creates a new user in Entra ID (onboarding) | Manual |
 | `disable-user.yml` | Disables account and revokes all active sessions (offboarding) | Manual |
@@ -113,9 +113,6 @@ az rest --method POST `
 
 Go to **Azure Portal → Entra ID → Roles and administrators → User Administrator** — you should see `github-ad-automation` listed as a member.
 
-![User Administrator](<SP-user administrator.png>)
-
-
 ---
 
 ### Step 3 — Assign Contributor role on the subscription
@@ -133,9 +130,10 @@ az role assignment create \
 
 Go to **Azure Portal → Subscriptions → Your subscription → Access control (IAM) → Role assignments** — you should see `github-ad-automation` with the Contributor role.
 
+![User Administrator](<SP-user administrator-1.png>)
 ---
 
-### Step 4 — Grant Graph API permissions (read and write)
+### Step 4 — Grant Graph API read and write permissions
 
 The service principal needs explicit Microsoft Graph API permissions to read and write user data.
 
@@ -275,14 +273,38 @@ Each workflow below includes exact steps to run it and verify the result in the 
 
 Go to **portal.azure.com → Entra ID → Users** → search for `Apple Lee`.
 
+![Create user - GitHub Actions success](create-new-user-workflow-1.png)
 
-![Create user - GitHub Actions success](create-new-user-workflow.png)
-
-![Apple Lee created in Entra ID](<Create apple lee.png>)
+![Apple Lee created in Entra ID](<Create apple lee-1.png>)
 
 ---
 
-### Test 2 — Disable user (offboarding)
+### Test 2 — Reset password
+
+**Run the workflow:**
+
+1. Go to **Actions → Reset user password → Run workflow**
+2. Fill in the form:
+
+   | Field | Type | Test value |
+   |-------|------|-----------|
+   | User email | Text | `apple.lee@yourtenant.onmicrosoft.com` |
+   | Temporary password | Text | `TempPass@2026!` |
+   | Force password change on next login? | Dropdown | `true` or `false` |
+
+3. Click **Run workflow** → wait for the green checkmark ✅
+
+**Verify in Azure Portal:**
+
+Go to **Entra ID → Users → Apple Lee → Authentication methods** — last password change timestamp reflects the current time.
+
+![Reset password - GitHub Actions success](reset-password-workflow.png)
+
+![Password reset confirmed in Entra ID](<apple lee reset password successfully.png>)
+
+---
+
+### Test 3 — Disable user (offboarding)
 
 **Run the workflow:**
 
@@ -294,14 +316,13 @@ Go to **portal.azure.com → Entra ID → Users** → search for `Apple Lee`.
 
 Go to **Entra ID → Users → Apple Lee** — account status shows **disabled**.
 
-![Disable user - GitHub Actions success](images/disable-user-actions.png)
+![Disable user - GitHub Actions success](<Diabled user workflow.png>)
 
-
-![Apple Lee disabled in Entra ID](images/disable-user-azure.png)
+![Apple Lee disabled in Entra ID](<Apple lee diabled account.png>)
 
 ---
 
-### Test 3 — Unlock account
+### Test 4 — Unlock account
 
 **Run the workflow:**
 
@@ -313,25 +334,25 @@ Go to **Entra ID → Users → Apple Lee** — account status shows **disabled**
 
 Go to **Entra ID → Users → Apple Lee** — account status shows **enabled**.
 
-![Unlock account - GitHub Actions success](images/unlock-account-actions.png)
-![Apple Lee unlocked in Entra ID](images/unlock-account-azure.png)
+![Unlock account - GitHub Actions success](<Unlock account workflow.png>)
 
+![Apple Lee unlocked in Entra ID](<Account enabled after workflow.png>)
 ---
 
-### Test 4 — Reset password
+### Test 5 — Full lifecycle test (recommended)
 
-**Run the workflow:**
+Run all four workflows in sequence to simulate a complete employee lifecycle:
 
-1. Go to **Actions → Reset user password → Run workflow**
-2. Enter: `apple.lee@yourtenant.onmicrosoft.com`
-3. Click **Run workflow** → wait for the green checkmark ✅
+```
+1. Create user    →  Apple Lee account created
+2. Reset password →  Custom temp password set, force change on/off
+3. Disable user   →  Account disabled, sessions revoked
+4. Unlock account →  Account re-enabled
+```
 
-**Verify in Azure Portal:**
+All four runs appear in the **Actions** tab with timestamps, inputs, and results — a complete audit trail.
 
-Go to **Entra ID → Users → Apple Lee → Authentication methods** — last password change timestamp reflects the current time.
-
-![Reset password - GitHub Actions success](images/reset-password-actions.png)
-![Password reset confirmed in Entra ID](images/reset-password-azure.png)
+![Full lifecycle - GitHub Actions](images/full-lifecycle-actions.png)
 
 ---
 
@@ -340,12 +361,19 @@ Go to **Entra ID → Users → Apple Lee → Authentication methods** — last p
 ### Reset password (`reset-password.yml`)
 
 **Inputs:**
-- `user_email` — the UPN of the user (e.g. `john.smith@yourtenant.onmicrosoft.com`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `user_email` | Text | UPN of the user (e.g. `john.smith@yourtenant.onmicrosoft.com`) |
+| `temp_password` | Text | Temporary password to set (default: `TempPass@2026!`) |
+| `force_change` | Dropdown | Whether user must change password on next login (`true` / `false`) |
 
 **What it does:**
 1. Authenticates to Azure using the service principal
-2. Calls Graph API `PATCH /users/{email}` to set a temporary password
-3. Forces the user to change their password on next sign-in
+2. Calls Graph API `PATCH /users/{email}` with the provided password
+3. Optionally forces the user to change their password on next sign-in
+
+**Use case:** User forgot their password, account is locked out, or admin wants to set a specific temporary password.
 
 ---
 
@@ -358,13 +386,15 @@ Go to **Entra ID → Users → Apple Lee → Authentication methods** — last p
 1. Authenticates to Azure
 2. Calls Graph API `PATCH /users/{email}` with `accountEnabled: true`
 
+**Use case:** Account was disabled due to too many failed sign-in attempts.
+
 ---
 
 ### Create user — onboarding (`create-user.yml`)
 
 **Inputs:**
 - `display_name` — user's full name (e.g. `Apple Lee`)
-- `email` — new UPN (e.g. `apple.lee@yourtenant.onmicrosoft.com`)
+- `email` — new UPN using verified domain (e.g. `apple.lee@yourtenant.onmicrosoft.com`)
 - `department` — user's department (e.g. `IT`, `Finance`, `HR`)
 
 **What it does:**
@@ -372,6 +402,8 @@ Go to **Entra ID → Users → Apple Lee → Authentication methods** — last p
 2. Extracts the mail nickname from the email address
 3. Calls Graph API `POST /users` to create a new Entra ID account
 4. Sets a temporary password with forced change on first sign-in
+
+**Use case:** New employee starting — create their account before day one.
 
 ---
 
@@ -385,6 +417,8 @@ Go to **Entra ID → Users → Apple Lee → Authentication methods** — last p
 2. Disables the account via `PATCH /users/{email}` with `accountEnabled: false`
 3. Revokes all active sign-in sessions via `POST /users/{email}/revokeSignInSessions`
 
+**Use case:** Employee leaving the company — immediately cut off all access.
+
 ---
 
 ## Security considerations
@@ -394,14 +428,14 @@ Go to **Entra ID → Users → Apple Lee → Authentication methods** — last p
 - **Graph API permissions scoped** — only `User.ReadWrite.All` and `Directory.ReadWrite.All`
 - **Audit trail** — every workflow run permanently logged in GitHub Actions
 - **Session revocation** — offboarding immediately invalidates all active tokens
-- **Forced password change** — all resets require user to set a new password on next sign-in
+- **Forced password change** — configurable per reset, defaults to required
 
 ---
 
 ## Troubleshooting — issues encountered during setup and their fixes
 
 ### Issue 1 — `Role 'User Administrator' doesn't exist`
-**Cause:** User Administrator is an Entra ID directory role, not an Azure RBAC role. It cannot be assigned via the `--role` flag in `az ad sp create-for-rbac`.  
+**Cause:** User Administrator is an Entra ID directory role, not an Azure RBAC role. It cannot be assigned via the `--role` flag.  
 **Fix:** Create the service principal without `--role`, then assign the role separately via the Graph API `roleManagement` endpoint using the built-in role ID `fe930be7-5e62-47db-91af-98c3a49a38b1`.
 
 ---
@@ -413,20 +447,20 @@ Go to **Entra ID → Users → Apple Lee → Authentication methods** — last p
 ---
 
 ### Issue 3 — `Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable`
-**Cause:** `azure/login@v2` defaults to OIDC authentication which requires additional GitHub configuration. Also triggered by accidentally running an old cached workflow version.  
-**Fix:** Use `azure/login@v1` with the `creds` parameter containing individual secrets in inline JSON format. Always trigger a **fresh new run** — never use the Re-run button on old runs.
+**Cause:** `azure/login@v2` defaults to OIDC authentication which requires additional GitHub configuration. Also triggered by clicking Re-run on an old workflow run.  
+**Fix:** Use `azure/login@v1` with the `creds` parameter. Always trigger a **fresh new run** from the Actions tab — never use the Re-run button on old runs.
 
 ---
 
 ### Issue 4 — `No subscriptions found`
-**Cause:** The service principal had no Azure subscription role — only an Entra ID role.  
+**Cause:** The service principal had no Azure subscription role — only an Entra ID directory role.  
 **Fix:** Assign the `Contributor` role on the subscription using `az role assignment create`.
 
 ---
 
 ### Issue 5 — `The domain portion of the userPrincipalName property is invalid`
 **Cause:** The email domain used for a new user did not match any verified domain in the tenant.  
-**Fix:** Run `az rest --method GET --url "https://graph.microsoft.com/v1.0/domains"` to find your verified domain, then use that domain for all user emails (e.g. `apple.lee@yourtenant.onmicrosoft.com`).
+**Fix:** Run `az rest --method GET --url "https://graph.microsoft.com/v1.0/domains"` to find your verified domain, then use that exact domain for all user emails.
 
 ---
 
