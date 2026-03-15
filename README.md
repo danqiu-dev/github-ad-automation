@@ -113,7 +113,7 @@ az rest --method POST `
 
 Go to **Azure Portal → Entra ID → Roles and administrators → User Administrator** — you should see `github-ad-automation` listed as a member.
 
-![User Administrator](<SP-user administrator-1.png>)
+![User Administrator](<SP-user administrator-2.png>)
 
 ---
 
