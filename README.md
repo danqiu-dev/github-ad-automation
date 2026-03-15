@@ -352,7 +352,6 @@ Run all four workflows in sequence to simulate a complete employee lifecycle:
 
 All four runs appear in the **Actions** tab with timestamps, inputs, and results — a complete audit trail.
 
-![Full lifecycle - GitHub Actions](images/full-lifecycle-actions.png)
 
 ---
 
