@@ -69,7 +69,7 @@ Entra ID (user management)
 
 ### Step 1 — Create the service principal
 
-> **Note:** "User Administrator" is an Entra ID role, not an Azure RBAC role, so it cannot be assigned directly via the `--role` flag. We create the service principal first, then assign the role separately via the Graph API.
+> **Note:** "User Administrator" is an Entra ID role, not an Azure RBAC role, so it cannot be assigned directly via the `--role` flag. We create the service principal first, then assign the role separately.
 
 Run this in your terminal:
 
@@ -79,7 +79,7 @@ az ad sp create-for-rbac \
   --sdk-auth
 ```
 
-Copy the **entire JSON output** — you will need it in Step 3.
+Copy the **entire JSON output** — you will need values from it in the next steps.
 
 ---
 
@@ -107,28 +107,99 @@ az rest --method POST `
   --body "@$env:TEMP\role.json"
 ```
 
-> The `roleDefinitionId` `fe930be7-5e62-47db-91af-98c3a49a38b1` is the permanent built-in ID for the User Administrator role and never changes across tenants.
+> The `roleDefinitionId` `fe930be7-5e62-47db-91af-98c3a49a38b1` is the permanent built-in ID for User Administrator and never changes across tenants.
 
 **Verify the role was assigned:**
 
 Go to **Azure Portal → Entra ID → Roles and administrators → User Administrator** — you should see `github-ad-automation` listed as a member.
 
-![alt text](image.png)
+![User Administrator](<SP-user administrator.png>)
+
 
 ---
 
-### Step 3 — Add GitHub Secrets
+### Step 3 — Assign Contributor role on the subscription
 
-In your GitHub repository go to **Settings → Secrets and Variables → Actions → New repository secret** and add:
+> The service principal also needs an Azure subscription role so GitHub Actions can authenticate successfully.
 
-| Secret name | Value |
-|-------------|-------|
-| `AZURE_CREDENTIALS` | The full JSON output from Step 1 |
-| `AZURE_TENANT_ID` | Your Azure tenant ID |
+```bash
+az role assignment create \
+  --assignee "YOUR-SP-APP-ID" \
+  --role "Contributor" \
+  --scope "/subscriptions/YOUR-SUBSCRIPTION-ID"
+```
+
+**Verify the role was assigned:**
+
+Go to **Azure Portal → Subscriptions → Your subscription → Access control (IAM) → Role assignments** — you should see `github-ad-automation` with the Contributor role.
 
 ---
 
-### Step 4 — Clone and push this repo
+### Step 4 — Grant Graph API permissions (read and write)
+
+The service principal needs explicit Microsoft Graph API permissions to read and write user data.
+
+```powershell
+# Get the App ID
+$APP_ID = az ad sp list --display-name "github-ad-automation" --query "[0].appId" -o tsv
+
+# Grant User.ReadWrite.All (read and write all users)
+az ad app permission add `
+  --id $APP_ID `
+  --api 00000003-0000-0000-c000-000000000000 `
+  --api-permissions 741f803b-c850-494e-b5df-cde7c675a1ca=Role
+
+# Grant Directory.ReadWrite.All (read and write directory data)
+az ad app permission add `
+  --id $APP_ID `
+  --api 00000003-0000-0000-c000-000000000000 `
+  --api-permissions 19dbc75e-c2e2-444c-a770-ec69d8559fc7=Role
+
+# Grant admin consent for both permissions
+az ad app permission admin-consent --id $APP_ID
+```
+
+**Verify permissions were granted:**
+
+Go to **Azure Portal → Entra ID → App registrations → github-ad-automation → API permissions** — you should see:
+
+| Permission | Type | Status |
+|-----------|------|--------|
+| `User.ReadWrite.All` | Application | Granted |
+| `Directory.ReadWrite.All` | Application | Granted |
+
+---
+
+### Step 5 — Find your verified domain
+
+Every user's email must use your tenant's verified domain. Run this to find it:
+
+```bash
+az rest --method GET \
+  --url "https://graph.microsoft.com/v1.0/domains" \
+  --query "value[].id" -o tsv
+```
+
+It returns something like `yourtenant.onmicrosoft.com` — use this as the domain for all user emails (e.g. `apple.lee@yourtenant.onmicrosoft.com`).
+
+---
+
+### Step 6 — Add GitHub Secrets
+
+In your GitHub repository go to **Settings → Secrets and Variables → Actions → New repository secret** and add these 4 secrets individually:
+
+| Secret name | Where to find the value |
+|-------------|------------------------|
+| `AZURE_CLIENT_ID` | `appId` from the JSON output in Step 1 |
+| `AZURE_CLIENT_SECRET` | `password` from the JSON output in Step 1 |
+| `AZURE_SUBSCRIPTION_ID` | `subscriptionId` from the JSON output in Step 1 |
+| `AZURE_TENANT_ID` | `tenant` from the JSON output in Step 1 |
+
+> **Do not** wrap values in quotation marks — paste the raw value only.
+
+---
+
+### Step 7 — Clone and push this repo
 
 ```bash
 git clone https://github.com/danqiu-dev/azure-ad-automation.git
@@ -140,13 +211,40 @@ git push
 
 ---
 
-### Step 5 — Run a workflow
+### Step 8 — Test the connection
+
+Before running the full workflows, verify the Azure login works:
+
+```yaml
+# .github/workflows/test-login.yml
+name: Test Azure login
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+
+      - name: Confirm login works
+        run: az account show
+```
+
+Run this workflow — if it returns your subscription details, login is working. ✅
+
+---
+
+### Step 9 — Run a workflow
 
 1. Go to your repository on GitHub
 2. Click the **Actions** tab
 3. Select a workflow (e.g. "Create new user")
 4. Click **Run workflow**
-5. Fill in the form fields
+5. Fill in the form fields — use your verified domain for the email
 6. Click the green **Run workflow** button
 7. Verify the result in **Azure Portal → Entra ID → Users**
 
@@ -168,29 +266,19 @@ Each workflow below includes exact steps to run it and verify the result in the 
    | Field | Test value |
    |-------|-----------|
    | Full name | `Apple Lee` |
-   | Email | `apple.lee@yourdomain.com` |
+   | Email | `apple.lee@yourtenant.onmicrosoft.com` |
    | Department | `IT` |
 
-3. Click **Run workflow**
-4. Wait for the green checkmark ✅
-
-**Verify in GitHub Actions:**
-
-Click the completed run → expand the **"Create user via Graph API"** step → you should see a `201 Created` response with the new user's details in JSON format.
-
-![Create user - GitHub Actions success](images/create-user-actions.png)
+3. Click **Run workflow** → wait for the green checkmark ✅
 
 **Verify in Azure Portal:**
 
-1. Go to **portal.azure.com → Entra ID → Users**
-2. Search for `Apple Lee`
-3. You should see the account with:
-   - Display name: `Apple Lee`
-   - User principal name: `apple.lee@yourdomain.com`
-   - Department: `IT`
-   - Account status: **Enabled**
+Go to **portal.azure.com → Entra ID → Users** → search for `Apple Lee`.
 
-![Apple Lee created in Entra ID](images/create-user-azure.png)
+
+![Create user - GitHub Actions success](create-new-user-workflow.png)
+
+![Apple Lee created in Entra ID](<Create apple lee.png>)
 
 ---
 
@@ -199,30 +287,15 @@ Click the completed run → expand the **"Create user via Graph API"** step → 
 **Run the workflow:**
 
 1. Go to **Actions → Disable user (offboarding) → Run workflow**
-2. Fill in the form:
-
-   | Field | Test value |
-   |-------|-----------|
-   | User email | `apple.lee@yourdomain.com` |
-
-3. Click **Run workflow**
-4. Wait for the green checkmark ✅
-
-**Verify in GitHub Actions:**
-
-Click the completed run → you should see two steps succeed:
-- **"Disable account"** — returns `204 No Content` (success, no body)
-- **"Revoke all active sessions"** — returns `200 OK`
-
-![Disable user - GitHub Actions success](images/disable-user-actions.png)
+2. Enter: `apple.lee@yourtenant.onmicrosoft.com`
+3. Click **Run workflow** → wait for the green checkmark ✅
 
 **Verify in Azure Portal:**
 
-1. Go to **portal.azure.com → Entra ID → Users**
-2. Search for `Apple Lee`
-3. You should see:
-   - Account status: **Account disabled** (shown in red)
-   - All active sessions immediately terminated
+Go to **Entra ID → Users → Apple Lee** — account status shows **disabled**.
+
+![Disable user - GitHub Actions success](images/disable-user-actions.png)
+
 
 ![Apple Lee disabled in Entra ID](images/disable-user-azure.png)
 
@@ -233,27 +306,14 @@ Click the completed run → you should see two steps succeed:
 **Run the workflow:**
 
 1. Go to **Actions → Unlock user account → Run workflow**
-2. Fill in the form:
-
-   | Field | Test value |
-   |-------|-----------|
-   | User email | `apple.lee@yourdomain.com` |
-
-3. Click **Run workflow**
-4. Wait for the green checkmark ✅
-
-**Verify in GitHub Actions:**
-
-Click the completed run → expand **"Unlock account via Graph API"** → should return `204 No Content`.
-
-![Unlock account - GitHub Actions success](images/unlock-account-actions.png)
+2. Enter: `apple.lee@yourtenant.onmicrosoft.com`
+3. Click **Run workflow** → wait for the green checkmark ✅
 
 **Verify in Azure Portal:**
 
-1. Go to **portal.azure.com → Entra ID → Users**
-2. Search for `Apple Lee`
-3. Account status should now show **Enabled** again
+Go to **Entra ID → Users → Apple Lee** — account status shows **enabled**.
 
+![Unlock account - GitHub Actions success](images/unlock-account-actions.png)
 ![Apple Lee unlocked in Entra ID](images/unlock-account-azure.png)
 
 ---
@@ -263,48 +323,15 @@ Click the completed run → expand **"Unlock account via Graph API"** → should
 **Run the workflow:**
 
 1. Go to **Actions → Reset user password → Run workflow**
-2. Fill in the form:
-
-   | Field | Test value |
-   |-------|-----------|
-   | User email | `apple.lee@yourdomain.com` |
-
-3. Click **Run workflow**
-4. Wait for the green checkmark ✅
-
-**Verify in GitHub Actions:**
-
-Click the completed run → expand **"Reset password via Graph API"** → should return `204 No Content`.
-
-![Reset password - GitHub Actions success](images/reset-password-actions.png)
+2. Enter: `apple.lee@yourtenant.onmicrosoft.com`
+3. Click **Run workflow** → wait for the green checkmark ✅
 
 **Verify in Azure Portal:**
 
-1. Go to **portal.azure.com → Entra ID → Users**
-2. Search for `Apple Lee` → click her account
-3. Go to **Authentication methods** tab
-4. You will see the password was updated — last password change timestamp will reflect the current time
+Go to **Entra ID → Users → Apple Lee → Authentication methods** — last password change timestamp reflects the current time.
 
+![Reset password - GitHub Actions success](images/reset-password-actions.png)
 ![Password reset confirmed in Entra ID](images/reset-password-azure.png)
-
-> **Tip:** To fully confirm the password reset, sign in as Apple Lee at [myaccount.microsoft.com](https://myaccount.microsoft.com) using the temporary password `TempPass@2026!` — you will be immediately prompted to set a new password.
-
----
-
-### Test 5 — Full lifecycle test (recommended)
-
-Run all four workflows in sequence to simulate a complete employee lifecycle:
-
-```
-1. Create user    →  Apple Lee account created
-2. Reset password →  Password changed to temporary
-3. Unlock account →  Account re-enabled
-4. Disable user   →  Account disabled, sessions revoked
-```
-
-All four runs will appear in the **Actions** tab with timestamps, inputs, and results — this serves as a complete audit trail.
-
-![Full lifecycle test in GitHub Actions](images/full-lifecycle-actions.png)
 
 ---
 
@@ -313,14 +340,12 @@ All four runs will appear in the **Actions** tab with timestamps, inputs, and re
 ### Reset password (`reset-password.yml`)
 
 **Inputs:**
-- `user_email` — the UPN of the user (e.g. `john.smith@yourdomain.com`)
+- `user_email` — the UPN of the user (e.g. `john.smith@yourtenant.onmicrosoft.com`)
 
 **What it does:**
 1. Authenticates to Azure using the service principal
 2. Calls Graph API `PATCH /users/{email}` to set a temporary password
 3. Forces the user to change their password on next sign-in
-
-**Use case:** User forgot their password or is locked out.
 
 ---
 
@@ -333,23 +358,20 @@ All four runs will appear in the **Actions** tab with timestamps, inputs, and re
 1. Authenticates to Azure
 2. Calls Graph API `PATCH /users/{email}` with `accountEnabled: true`
 
-**Use case:** Account was disabled due to too many failed sign-in attempts.
-
 ---
 
 ### Create user — onboarding (`create-user.yml`)
 
 **Inputs:**
 - `display_name` — user's full name (e.g. `Apple Lee`)
-- `email` — new UPN (e.g. `apple.lee@yourdomain.com`)
+- `email` — new UPN (e.g. `apple.lee@yourtenant.onmicrosoft.com`)
 - `department` — user's department (e.g. `IT`, `Finance`, `HR`)
 
 **What it does:**
 1. Authenticates to Azure
-2. Calls Graph API `POST /users` to create a new Entra ID account
-3. Sets a temporary password with forced change on first sign-in
-
-**Use case:** New employee starting — create their account before day one.
+2. Extracts the mail nickname from the email address
+3. Calls Graph API `POST /users` to create a new Entra ID account
+4. Sets a temporary password with forced change on first sign-in
 
 ---
 
@@ -363,25 +385,48 @@ All four runs will appear in the **Actions** tab with timestamps, inputs, and re
 2. Disables the account via `PATCH /users/{email}` with `accountEnabled: false`
 3. Revokes all active sign-in sessions via `POST /users/{email}/revokeSignInSessions`
 
-**Use case:** Employee leaving the company — immediately cut off all access.
-
 ---
 
 ## Security considerations
 
 - **No plaintext credentials** — all secrets stored in GitHub Encrypted Secrets
-- **Least privilege** — service principal only has `User Administrator` role, nothing broader
-- **Audit trail** — every workflow run is permanently logged in GitHub Actions with timestamp, trigger, and inputs
-- **Session revocation** — offboarding immediately invalidates all active tokens, not just disabling the account
-- **Forced password change** — all password resets require the user to set a new password on next sign-in
+- **Least privilege** — service principal only has `User Administrator` role
+- **Graph API permissions scoped** — only `User.ReadWrite.All` and `Directory.ReadWrite.All`
+- **Audit trail** — every workflow run permanently logged in GitHub Actions
+- **Session revocation** — offboarding immediately invalidates all active tokens
+- **Forced password change** — all resets require user to set a new password on next sign-in
 
 ---
 
-## Lessons learned during setup
+## Troubleshooting — issues encountered during setup and their fixes
 
-- The `--role "User Administrator"` flag in `az ad sp create-for-rbac` does not work because User Administrator is an Entra ID directory role, not an Azure RBAC role. It must be assigned separately via the Graph API `roleManagement` endpoint.
-- PowerShell multiline JSON in `az rest --body` causes Bad Request errors due to quote escaping. Writing the JSON to a temp file with `Out-File` solves this cleanly.
-- The `--sdk-auth` flag in `az ad sp create-for-rbac` shows a deprecation warning but still works as of March 2026.
+### Issue 1 — `Role 'User Administrator' doesn't exist`
+**Cause:** User Administrator is an Entra ID directory role, not an Azure RBAC role. It cannot be assigned via the `--role` flag in `az ad sp create-for-rbac`.  
+**Fix:** Create the service principal without `--role`, then assign the role separately via the Graph API `roleManagement` endpoint using the built-in role ID `fe930be7-5e62-47db-91af-98c3a49a38b1`.
+
+---
+
+### Issue 2 — `Bad Request — Unable to read JSON request payload`
+**Cause:** PowerShell mangles quotation marks when passing JSON inline in `az rest --body`.  
+**Fix:** Write the JSON to a temp file using `Out-File` and pass the file path to `--body "@$env:TEMP\role.json"`.
+
+---
+
+### Issue 3 — `Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable`
+**Cause:** `azure/login@v2` defaults to OIDC authentication which requires additional GitHub configuration. Also triggered by accidentally running an old cached workflow version.  
+**Fix:** Use `azure/login@v1` with the `creds` parameter containing individual secrets in inline JSON format. Always trigger a **fresh new run** — never use the Re-run button on old runs.
+
+---
+
+### Issue 4 — `No subscriptions found`
+**Cause:** The service principal had no Azure subscription role — only an Entra ID role.  
+**Fix:** Assign the `Contributor` role on the subscription using `az role assignment create`.
+
+---
+
+### Issue 5 — `The domain portion of the userPrincipalName property is invalid`
+**Cause:** The email domain used for a new user did not match any verified domain in the tenant.  
+**Fix:** Run `az rest --method GET --url "https://graph.microsoft.com/v1.0/domains"` to find your verified domain, then use that domain for all user emails (e.g. `apple.lee@yourtenant.onmicrosoft.com`).
 
 ---
 
@@ -418,4 +463,3 @@ IT Service Technician → aspiring Cloud / DevOps Engineer
 ## License
 
 MIT — free to use, fork, and build on.
-# github-ad-automation
