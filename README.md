@@ -238,18 +238,6 @@ Run this workflow — if it returns your subscription details, login is working.
 
 ---
 
-### Step 9 — Run a workflow
-
-1. Go to your repository on GitHub
-2. Click the **Actions** tab
-3. Select a workflow (e.g. "Create new user")
-4. Click **Run workflow**
-5. Fill in the form fields — use your verified domain for the email
-6. Click the green **Run workflow** button
-7. Verify the result in **Azure Portal → Entra ID → Users**
-
----
-
 ## Testing & verification
 
 Each workflow below includes exact steps to run it and verify the result in the Azure Portal.
