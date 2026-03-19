@@ -15,7 +15,6 @@ on:
 jobs:
   create:
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - name: Validate email input
       run: |
