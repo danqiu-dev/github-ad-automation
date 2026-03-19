@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate email input
-      run: |
-        if [[ ! "${{ inputs.email }}" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
-          echo "❌ Invalid email format: ${{ inputs.user_email }}"
-          exit 1
-        fi
-        echo "✅ Email format valid"
-        
+        run: |
+          if [[ ! "${{ inputs.email }}" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
+            echo "Invalid email format: ${{ inputs.email }}"
+            exit 1
+          fi
+          echo "Email format valid"
+
       - name: Azure login
         uses: azure/login@v1
         with:
