@@ -9,15 +9,16 @@ on:
 jobs:
   disable:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Validate email input
-      run: |
-        if [[ ! "${{ inputs.user_email }}" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
-          echo "❌ Invalid email format: ${{ inputs.user_email }}"
-          exit 1
-        fi
-        echo "✅ Email format valid"
-        
+        run: |
+          if [[ ! "${{ inputs.user_email }}" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
+            echo "Invalid email format: ${{ inputs.user_email }}"
+            exit 1
+          fi
+          echo "Email format valid"
+
       - name: Azure login
         uses: azure/login@v1
         with:
