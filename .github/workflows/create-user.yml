@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Validate email input
       run: |
-        if [[ ! "${{ inputs.user_email }}" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
+        if [[ ! "${{ inputs.email }}" =~ ^[^@]+@[^@]+\.[^@]+$ ]]; then
           echo "❌ Invalid email format: ${{ inputs.user_email }}"
           exit 1
         fi
