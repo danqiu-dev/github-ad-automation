@@ -1,5 +1,10 @@
 # Azure AD Automation — GitHub Actions + Entra ID
 
+[![Create new user (onboarding)](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/create-user.yml/badge.svg)](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/create-user.yml)
+[![Disable user (offboarding)](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/disable-user.yml/badge.svg)](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/disable-user.yml)
+[![Reset user password](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/reset-password.yml/badge.svg)](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/reset-password.yml)
+[![Unlock user account](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/unlock-account.yml/badge.svg)](https://github.com/danqiu-dev/github-ad-automation/actions/workflows/unlock-account.yml)
+
 Automating common IT administration tasks using **GitHub Actions** and **Microsoft Entra ID** via the Microsoft Graph API.  
 No servers. No scripts running on a VM. Just cloud-native automation triggered directly from GitHub.
 
